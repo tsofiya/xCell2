@@ -75,32 +75,26 @@ create.signatures = function(ref, types, samples, dependencies) {
   gsc
 }
 
-create.inSillicoMixtures= function(ref, gsc, types){
+create.single.cell.data.mat= function(ref, types){
   ntypes= length(types)
-  ntesttypes= 10
+  singleCellData= matrix(NA, ntypes, length(rownames(ref)))
+  rownames(singleCellData)= types
+  colnames(singleCellData)<- rownames(ref)
+  
+  i=1
+  for (type in types){
+    location= match(type, ref$label.main)
+    singleCellData[i,] <- assays(ref)$logcounts[,location]
+    i=i+1
+  }
+  
+  singleCellData
+}
+
+create.inSillicoMixtures= function(ref, gsc, types, singleCellData){
+  ntypes= length(types)
   inSillicoMix= c()
   for (type in types){
-    # randIds <- sample(1:(ntypes-1), ntesttypes, replace=F)
-    # inSillicoCellsnames= types[randIds]
-    # if (type %in% inSillicoCellsnames){
-    #   location= match(type,inSillicoCellsnames)
-    #   inSillicoCellsnames[location]= types[ntypes]
-    # }
-    inSillicoCellsnames= types#c(inSillicoCellsnames, type) # Selected cell type names
-
-    # Get experiment data for different cells type - maybe change to average?
-    #inSillicoData= matrix(NA, ntesttypes+1, length(rownames(ref)))
-    inSillicoData= matrix(NA, ntypes, length(rownames(ref)))
-    colnames(inSillicoData)<-rownames(ref)
-    rownames(inSillicoData)= inSillicoCellsnames
-
-    i=1
-    for (type in inSillicoCellsnames){
-      location= match(type, ref$label.main)
-      inSillicoData[i,] <- assays(ref)$logcounts[,location]
-      i=i+1
-    }
-
     # Create mixtures
     countMix= matrix(NA,length(ref@NAMES), 1000)
     colnames(countMix)<-(1:1000)/50
@@ -113,10 +107,11 @@ create.inSillicoMixtures= function(ref, gsc, types){
       perc= (randPerc/sumPerc)*((100-i/50)/100)
       perc= c(perc, i/(100*50))
       mix= rep(0, length(ref@NAMES))
-      mix = colSums(perc * inSillicoData) # My Gideon's line
+      mix = colSums(perc * singleCellData) # My Gideon's line
       countMix[,i]= mix
     }
 
+    # SimpleScore all signatures
     checkSED= SummarizedExperiment(assays=list(counts=countMix))
     inSillicoMix<- c(inSillicoMix, checkSED)
   }
@@ -177,21 +172,9 @@ choose.signatures = function(inSillicoMix, types, scores){
   bestSig
 }
 
-create.corrlationMixtures= function(percentage, ref){
+create.corrlationMixtures= function(percentage, ref, singleCellData){
 
   ntypes= length(types)
-
-  # Get experiment data for different cells type - maybe change to average?
-  inSillicoData= matrix(NA, ntypes, length(rownames(ref)))
-  colnames(inSillicoData)<-rownames(ref)
-  rownames(inSillicoData)= types
-
-  i=1
-  for (type in types){
-    location= match(type, ref$label.main)
-    inSillicoData[i,] <- assays(ref)$logcounts[,location]
-    i=i+1
-  }
 
   # Create mixtures
   countMix= matrix(NA,length(ref@NAMES), length(colnames(percentage)))
@@ -201,7 +184,7 @@ create.corrlationMixtures= function(percentage, ref){
   for (k in 1:length(colnames(percentage))){
     perc= unname(percentage[,k])
     mix= rep(0, length(ref@NAMES))
-    mix = colSums(perc * inSillicoData) # My Gideon's line
+    mix = colSums(perc * singleCellData) # My Gideon's line
     countMix[,k]= mix
   }
 
@@ -233,4 +216,162 @@ testing.correlation = function(mix, types,precentage, signatures, bestRank){
     mixScore[i, ]= totScore
   }
   mixScore
+}
+
+create.random.percentage = function(types){
+  ntypes= length(types)
+  # Create percentage for in-Sillico mix.
+  percentage= matrix(NA,length(types),20*ntypes)
+  colnames(percentage)<-1:(20*ntypes)
+  rownames(percentage)= types
+  
+  i=1
+  for (type in types){
+    for (k in 1:20){
+      randPrec= sample(100, ntypes, replace=T)
+      sumPrec= sum(randPrec)-randPrec[i]
+      prec= (randPrec/sumPrec)*((100-k)/100)
+      prec[i]= k/100
+      percentage[,(i-1)*20+k]= prec
+      
+    }
+    i=i+1
+  }
+  percentage
+}
+
+plot.linear.regression= function(working.dir, mixScores, percentage){
+  
+  dir.create(file.path(working.dir,"LinearRegressionGraphs"), showWarnings = FALSE)
+  for (type in types){
+    x= percentage[type,] 
+    y=mixScores[type, ]
+    df = data.frame(x, y)
+    line = lm(y~x)
+    pred_line = predict(line)
+    LinerRegressionPath= file.path(working.dir,"LinearRegressionGraphs",
+                                   paste0(type,"LinearRegression.jpg"))
+    jpeg(file=LinerRegressionPath)
+    plot.new()
+    
+    plot(y, x,main=paste0(type," Linear Regression"),
+         xlab="percentage", ylab="Score", pch = 11, col = "blue")
+    lines(pred_line,x,col="red")
+    dev.off()
+  }
+}
+
+create.parameter.matrix= function(working.dir, types, mixScores, percentage){
+  ntypes= length(types)
+  parameterMatrix= matrix(NA, ntypes, 2)
+  rownames(parameterMatrix)=types
+  colnames(parameterMatrix)<-c("b", "calib")
+  dir.create(file.path(working.dir,"LinearTransformGraphs"), showWarnings = FALSE)
+  for (i in 1:ntypes){
+    type= types[i]
+    df = data.frame(x=mixScores[i,],y=percentage[i,])
+    df$x=df$x-min(df$x)
+    orderdInd= order(df$x)
+    df$x= df$x[orderdInd]
+    df$y= df$y[orderdInd]
+    
+    z = nlsLM(formula = y~a*x^b,start = list(a=1,b=1),data = df)
+    b = coef(z)[2]
+    calib = coef(lm(df$x^b~df$y))[2]
+    parameterMatrix[i, ]= c(b, calib)
+    
+    LinerTransformPath= file.path(working.dir,"LinearTransformGraphs",
+                                  paste0(type,"LinerTransform.jpg"))
+    jpeg(file=LinerTransformPath)
+    plot.new()
+    plot((df$x^b)/calib,df$y, main=paste0(type," Linear Transform"),
+         xlab="percentage", ylab="Score", col="blue")
+    
+    x = (df$x^b)/calib
+    y = df$y
+    line = lm(x ~ y)
+    pred_line = predict(line)
+    lines(pred_line, y, col="red")
+    dev.off()
+  }
+  
+  parameterMatrix
+}
+
+transform.mix.score= function(parameterMatrix, mixScores){
+  transformedMix= mixScores
+  for(i in 1:dim(mixScores)[1]){
+    vec = transformedMix[i,]
+    vec = vec + abs(min(vec))
+    vec = vec^parameterMatrix[i,1]
+    vec = vec/parameterMatrix[i,2]
+    transformedMix[i,] = vec
+  }
+  
+  transformedMix
+}
+
+create.ref.mix= function(types, singleCellData, control.type){
+  ntypes= length(types)
+  refmixData= matrix(NA, length(colnames(singleCellData)),ntypes)
+  rownames(refmixData)= rownames(ref)
+  colnames(refmixData)= types
+  
+  refMixPerc= matrix(0, ntypes, ntypes)
+  rownames(refMixPerc)=types
+  colnames(refMixPerc)<-1:ntypes
+  
+  
+  for(i in 1:ntypes){
+    contorlTypeName= types[control.type[i]]
+    typeName= types[i]
+    locationControl= match(contorlTypeName, rownames(singleCellData))
+    controlData= assays(ref)$logcounts[,locationControl]*0.8
+    locationType= match(typeName, rownames(singleCellData))
+    typeData= assays(ref)$logcounts[,locationType]*0.2
+    refmixData[,i] <- controlData+typeData
+    refMixPerc[i, i]= 0.2
+    refMixPerc[i, control.type[i]]=0.8
+  }
+  
+  refmixExp= SummarizedExperiment(assays=list(counts=refmixData))
+  refmixExp
+}
+
+score.ref.mix= function(types, bestSig, gscSignatures){
+  ntypes= length(types)
+  refMixScore= matrix(NA, ntypes, ntypes)
+  colnames(refMixScore)<-1:ntypes
+  rownames(refMixScore)=types
+  
+  for (i in 1:ntypes){
+    sigs= bestSig[i,]
+    nsigs= length(sigs)
+    sumWeight= sum(1:nsigs)
+    j= nsigs
+    totScore= rep(0,ntypes)
+    for (sig in sigs){
+      gs= gscSignatures[[sig]]
+      totScore <-totScore+ (j/sumWeight)*(simpleScore(refmixRankedData, geneIds(gs), centerScore = TRUE)$TotalScore)
+      j= j-1
+    }
+    
+    refMixScore[i, ]= totScore
+  }
+  refMixScore
+}
+
+create.refmix.controls= function(types, cormat){
+  ntypes= length(types)
+  control.type<-c()
+  for(i in 1:ntypes){
+    corrPercenatages = abs(cormat[,i])
+    minInd = which(corrPercenatages==min(corrPercenatages))
+    control.type<-c(control.type,minInd)
+    contorlTypeName = colnames(cormat)[minInd]
+    typeName = colnames(cormat)[i]
+    print(c("base type:",typeName," min corr type:", contorlTypeName))
+  }
+  
+  control.type
 }

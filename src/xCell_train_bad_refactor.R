@@ -37,42 +37,32 @@ types=unique(samples)
 ntypes= length(types)
 singleCellData= create.single.cell.data.mat(ref, types) # single cell data for all cell types- maybe change to average?
 
-
 # ----------------- Generating Signatures -----------------
-# Generating signatures. 
 gsc <- create.signatures(ref, types, samples, NA)
 
-# Generating percentage matrix in preperation for mixtures simulations
-percentage= create.percentage.matrix(types, (1:500)/2500)
+# Create in sillico mixtures.
 
-# Generating in-sillico mixtures
-mixtures= create.mixtures(singleCellData, percentage)
+inSillicoMix= create.inSillicoMixtures(ref, gsc, types, singleCellData)
 
-# scoring mixtures according to the generated signatures. 
-scoreMatrix= score.signature(mixtures, gsc)
+# get mix score.
+scores= create.signatureScores(ref, gsc,  inSillicoMix, types)
 
-# Testing the corrletion of the score and the real percentages and returns the IDs of the best signatures
-bestSignatures= choose.signatures(percentage, types, scoreMatrix)
-bestGsc= gsc[c(bestSignatures)]
+# Choose best signatures.
+bestSig<- choose.signatures(inSillicoMix, types, scores)
+
 
 # ----------------- Corrlation testing and Linear Transformation -----------------
-# Generating percentage matrix for linear regression
-percentage= create.percentage.matrix(types, (1:20)/100)
+gscSignatures= gsc[c(bestSig)]
 
-# Generating in-sillico mixtures
-mixtures= create.mixtures(singleCellData, percentage)
+percentage= create.random.percentage(types)
+mixtures= create.corrlationMixtures(percentage, ref, singleCellData)
+mixScores= testing.correlation(mixtures, types, precentage, gscSignatures, bestSig)
+plot.linear.regression(working.dir, mixScores, percentage)
+parameterMatrix= create.parameter.matrix(working.dir, types, mixScores, percentage)
 
-# scoring mixtures according to the generated signatures. 
-weightedScoreMat= weighted.score(mixtures, bestSignatures, bestGsc, types)
+transformedMixScore= transform.mix.score(parameterMatrix, mixScores)
 
-plot.linear.regression(working.dir, weightedScoreMat, percentage)
-
-parameterMatrix= create.parameter.matrix(working.dir, types, weightedScoreMat, percentage)
-
-
-transformedMixScore= transform.mix.score(parameterMatrix, weightedScoreMat)
-
-corr= cor(t(transformedMixScore), (percentage), method = "spearman")
+corr= cor(t(transformedMixScore), t(percentage))
 # Plot the corralation matrix before imp
 corrMatrixPath= file.path(working.dir,"corrlation matrix before spillover.jpg")
 jpeg(file=corrMatrixPath)
@@ -81,15 +71,16 @@ corrplot(corr, order = 'hclust', main="corrlation matrix before spillover")
 dev.off()
 jpeg(file = NULL)
 
-
 # -----------------Correlation and spillover matrix--------------
-controls=  apply(corr, 1, which.min)
-refPercentage= create.ref.percentage(types, corr, controls)
-refmixExp=create.mixtures(singleCellData, refPercentage)
-refMixScore= weighted.score(refmixExp, bestSignatures, bestGsc, types)
+
+refmixExp=create.ref.mix(types, singleCellData, corr)
+refmixRankedData<-rankGenes(refmixExp)
+refMixScore= score.ref.mix(types, bestSig, gscSignatures)
+
+
 transformedRefmix= transform.mix.score(parameterMatrix, refMixScore)
+
 spilloverMat= 0.2*((transformedRefmix)) / diag((transformedRefmix))
-percentageMat[cbind(1:length(types), controls)]= 0
 corrplot(spilloverMat)
 
 spillMatPath= file.path(working.dir,"spillover matrix.jpg")
