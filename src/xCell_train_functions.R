@@ -184,7 +184,7 @@ weighted.score= function(mixtures, bestSignatures, bestGsc, types){
     j= nsigs
     totScore= rep(0,experiments)
     for (sig in sigs){
-      gs= signatures[[sig]]
+      gs= bestGsc[[sig]]
       totScore <-totScore+ (j/sumWeight)*(simpleScore(mixRankedData, geneIds(gs), centerScore = TRUE)$TotalScore)
       j= j-1
     }

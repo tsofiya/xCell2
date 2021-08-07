@@ -83,13 +83,14 @@ jpeg(file = NULL)
 
 
 # -----------------Correlation and spillover matrix--------------
-controls=  apply(corr, 1, which.min)
+controls=  rep(9, ntypes)#apply(corr, 1, which.min)
 refPercentage= create.ref.percentage(types, corr, controls)
 refmixExp=create.mixtures(singleCellData, refPercentage)
 refMixScore= weighted.score(refmixExp, bestSignatures, bestGsc, types)
 transformedRefmix= transform.mix.score(parameterMatrix, refMixScore)
 spilloverMat= 0.2*((transformedRefmix)) / diag((transformedRefmix))
-percentageMat[cbind(1:length(types), controls)]= 0
+spilloverMat=spilloverMat[row.names(spilloverMat) != "Erythrocytes", , drop = FALSE] 
+spilloverMat=spilloverMat[,-c(9)]#percentageMat[cbind(1:length(types), controls)]= 0
 corrplot(spilloverMat)
 
 spillMatPath= file.path(working.dir,"spillover matrix.jpg")
