@@ -4,11 +4,9 @@ create.single.cell.data.mat= function(ref, types){
   rownames(singleCellData)= types
   colnames(singleCellData)<- rownames(ref)
   
-  i=1
   for (type in types){
     location= match(type, ref$label.main)
-    singleCellData[i,] <- assays(ref)$logcounts[,location]
-    i=i+1
+    singleCellData[type,] <- assays(ref)$logcounts[,location]
   }
   
   singleCellData
@@ -44,17 +42,17 @@ create.signatures = function(ref, types, samples, dependencies) {
     for (diff in diff_vals) {
       for (j in 1:round(length(probs)/2+0.5)) {
         diff_genes = lapply(q,function(x) q[[i]][j,]>x[length(probs)-j,]+diff)
-        output <- matrix(unlist(diff_genes), nrow = ntypes, byrow = TRUE)
-        for (n in (ntypes-1):(ntypes-3)) {
-          g = colSums(output)>=n
-          if (sum(g)>7 & sum(g)<201){
-            set_name= sprintf("%s-%g-%g-%g-%g",types[i],round(probs[j]*100),diff,ntypes-n, i)
-            set_names<- c(set_names, set_name)
-            gs=GeneSet(rownames(ref)[g],
-                       setName=set_name)
-            counter<-counter+1
-            listIn<-c(listIn, c(gs))
-            
+          output <- matrix(unlist(diff_genes), nrow = ntypes, byrow = TRUE)
+          for (n in (ntypes-1):(ntypes-3)) {
+            g = colSums(output)>=n
+            if (sum(g)>7 & sum(g)<201){
+              set_name= sprintf("%s-%g-%g-%g-%g",types[i],round(probs[j]*100),diff,ntypes-n, i)
+              set_names<- c(set_names, set_name)
+              gs=GeneSet(rownames(ref)[g],
+                         setName=set_name)
+              counter<-counter+1
+              listIn<-c(listIn, c(gs))
+          
           }
         }
       }
@@ -76,7 +74,8 @@ create.signatures = function(ref, types, samples, dependencies) {
 #'
 #' @examples
 create.percentage.matrix= function(types, cellPercentage){
-  experiemts= length(types)*length(cellPercentage)
+  ntypes= length(types)
+  experiemts= ntypes*length(cellPercentage)
   percentageMat= matrix(NA, experiemts, length(types)) 
   rownames(percentageMat)= 1:experiemts
   colnames(percentageMat) <- types
@@ -112,8 +111,8 @@ create.percentage.matrix= function(types, cellPercentage){
 #' @examples
 create.mixtures= function(singleCellData, percentage){
   experiments= length(rownames(percentage))
-  countMix= matrix(NA, length(ref@NAMES), experiments)
-  rownames(countMix)= ref@NAMES
+  countMix= matrix(NA, length(colnames(singleCellData)), experiments)
+  rownames(countMix)= colnames(singleCellData)
   colnames(countMix)= 1:experiments
   
   for (i in 1:experiments){
@@ -137,10 +136,11 @@ create.mixtures= function(singleCellData, percentage){
 #'
 #' @examples
 score.signature= function(mixtures, signatures){
+  message("Scoring signatures")
   rankData= rankGenes(mixtures)
-  experiments= length(rownames(percentage))
+  experiments= length(colnames(mixtures))
   scoreMatrix= matrix(NA, length(signatures), experiments)
-  rownames(scoreMatrix)= names(gsc)
+  rownames(scoreMatrix)= names(signatures)
   colnames(scoreMatrix)= 1:experiments
   
   for (gs in signatures){
@@ -151,15 +151,16 @@ score.signature= function(mixtures, signatures){
 }
 
 choose.signatures = function(percentage, types, scores){
+  message("Chosing best signatures")
   ntypes= length(types)
   bestSig= matrix(NA, ntypes, 5)
   colnames(bestSig)<- 1:5
   rownames(bestSig)= types
   
   for (type in types){
-    typeScores= scores[startsWith( rownames(scores), type),]
+    typeScores= scores[startsWith(rownames(scores), type),]
     perc= (percentage[, type])
-    corrlation= cor(t(scores), perc, method= "spearman")
+    corrlation= cor(t(typeScores), perc, method= "spearman")
     top5= head( order(corrlation, decreasing = TRUE), 5)
     top5Sig= rownames(corrlation)[top5]
     bestSig[type,]=top5Sig
@@ -168,6 +169,7 @@ choose.signatures = function(percentage, types, scores){
 }
 
 weighted.score= function(mixtures, bestSignatures, bestGsc, types){
+  message("Calculating weighted score")
   mixRankedData<-rankGenes(mixtures)
   ntypes= length(types)
   experiments= length(colnames(mixtures))
@@ -175,7 +177,7 @@ weighted.score= function(mixtures, bestSignatures, bestGsc, types){
   # Score matrix
   mixScore= matrix(NA, ntypes, experiments)
   rownames(mixScore)=types
-  colnames(mixScore)= 1:experiments
+  colnames(mixScore)= colnames(mixtures)
   
   for (type in types){
     sigs= bestSignatures[type,]
@@ -194,8 +196,8 @@ weighted.score= function(mixtures, bestSignatures, bestGsc, types){
   mixScore
 }
 
-plot.linear.regression= function(working.dir, mixScores, percentage){
-  
+plot.linear.regression= function(working.dir, mixScores, percentage, types){
+  message("Plotting linear regression")
   dir.create(file.path(working.dir,"LinearRegressionGraphs"), showWarnings = FALSE)
   for (type in types){
     x= mixScores[type, ]
@@ -216,7 +218,8 @@ plot.linear.regression= function(working.dir, mixScores, percentage){
   }
 }
 
-create.parameter.matrix= function(working.dir, types, mixScores, percentage){
+create.parameter.matrix= function(working.dir, types, mixScores, percentage, save.graph= FALSE){
+  message("Calculate fit values")
   ntypes= length(types)
   parameterMatrix= matrix(NA, ntypes, 2)
   rownames(parameterMatrix)=types
@@ -234,6 +237,7 @@ create.parameter.matrix= function(working.dir, types, mixScores, percentage){
     calib = coef(lm(df$x^b~df$y))[2]
     parameterMatrix[type, ]= c(b, calib)
     
+    if (save.graph){
     LinerTransformPath= file.path(working.dir,"LinearTransformGraphs",
                                   paste0(type,"LinerTransform.jpg"))
     jpeg(file=LinerTransformPath)
@@ -247,12 +251,14 @@ create.parameter.matrix= function(working.dir, types, mixScores, percentage){
     pred_line = predict(line)
     lines(pred_line, y, col="red")
     dev.off()
+    }
   }
   
   parameterMatrix
 }
 
 transform.mix.score= function(parameterMatrix, mixScores){
+  message("Transform score to percentage")
   transformedMix= mixScores
   for(i in 1:dim(mixScores)[1]){
     vec = transformedMix[i,]
@@ -266,6 +272,7 @@ transform.mix.score= function(parameterMatrix, mixScores){
 }
 
 create.ref.percentage= function(types, corr, controls){
+  message("Creating percentage matrix for refmix (spillover matrix")
   percentageMat= diag(0.2, length(types), length(types))
   rownames(percentageMat)= types
   colnames(percentageMat)= 1:length(types)
