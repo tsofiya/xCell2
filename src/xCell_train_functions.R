@@ -1,3 +1,6 @@
+library(ggplot2)
+
+
 create.single.cell.data.mat= function(ref, types){
   ntypes= length(types)
   singleCellData= matrix(NA, ntypes, length(rownames(ref)))
@@ -196,27 +199,34 @@ weighted.score= function(mixtures, bestSignatures, bestGsc, types){
   mixScore
 }
 
-plot.linear.regression= function(working.dir, mixScores, percentage, types){
+plot.linear.regression= function(working.dir, mixScores, percentage, types, save.graph= FALSE){
   message("Plotting linear regression")
   dir.create(file.path(working.dir,"LinearRegressionGraphs"), showWarnings = FALSE)
-  for (type in types){
-    x= mixScores[type, ]
-    y=percentage[,type] 
-    #df = data.frame(x, y)
-    #df= df[order(df$x, decreasing = FALSE), ]
-    line = lm(x~y)
-    pred_line = predict(line)
-    LinerRegressionPath= file.path(working.dir,"LinearRegressionGraphs",
-                                   paste0(type,"LinearRegression.jpg"))
-    jpeg(file=LinerRegressionPath)
-    plot.new()
-    
-    plot(x, y,main=paste0(type," Linear Regression"),
-         xlab="Score", ylab="Percentage", pch = 11, col = "blue")
-    lines(pred_line,y,col="red")
-    dev.off()
-  }
+  
+  panel= matrix(0, length(types)*dim(mixScores)[2], 3)
+  colnames(panel)=c("Score", "Percentage", "cell.type")
+  
+  panel[, 1]= as.vector(t(mixScores))
+  panel[,2 ]= as.vector((percentage))
+  panel[,3]= rep(types, each = dim(mixScores)[2])
+  
+  paneldf= as.data.frame(panel, stringsAsFactors = FALSE)
+  paneldf$Score= as.numeric(paneldf$Score)
+  paneldf$Percentage= as.numeric(paneldf$Percentage)
+  ggplot(paneldf,mapping= aes(Score,Percentage))+
+    geom_smooth(method=lm, se=FALSE, color="red")+
+    geom_point(size=0.1)+facet_wrap(.~cell.type)+
+    theme(axis.title.x=element_blank(),
+          axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())+
+    theme(axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank())+
+    stat_cor(aes(label = ..r.label..), method = "spearman", cor.coef.name	="rho")
+  if (save.graph)
+    ggsave(filename="Linear Regression Panel.jpg")
 }
+
 
 create.parameter.matrix= function(working.dir, types, mixScores, percentage, save.graph= FALSE){
   message("Calculate fit values")
@@ -237,21 +247,31 @@ create.parameter.matrix= function(working.dir, types, mixScores, percentage, sav
     calib = coef(lm(df$x^b~df$y))[2]
     parameterMatrix[type, ]= c(b, calib)
     
-    if (save.graph){
-    LinerTransformPath= file.path(working.dir,"LinearTransformGraphs",
-                                  paste0(type,"LinerTransform.jpg"))
-    jpeg(file=LinerTransformPath)
-    plot.new()
-    plot((df$x^b)/calib,df$y, main=paste0(type," Linear Transform"),
-         xlab="percentage", ylab="Score", col="blue")
     
-    x = (df$x^b)/calib
-    y = df$y
-    line = lm(x ~ y)
-    pred_line = predict(line)
-    lines(pred_line, y, col="red")
-    dev.off()
-    }
+  }
+  
+  if (save.graph){
+    mixScores= transform.mix.score(parameterMatrix, mixScores)
+    panel= matrix(0, length(types)*dim(mixScores)[2], 3)
+    colnames(panel)=c("Score", "Percentage", "cell.type")
+    panel[, 1]= as.vector(t(mixScores))
+    panel[,2 ]= as.vector((percentage))
+    panel[,3]= rep(types, each = dim(mixScores)[2])
+    
+    paneldf= as.data.frame(panel, stringsAsFactors = FALSE)
+    paneldf$Score= as.numeric(paneldf$Score)
+    paneldf$Percentage= as.numeric(paneldf$Percentage)
+    ggplot(paneldf,mapping= aes(Score,Percentage))+
+      geom_smooth(method=lm, se=FALSE, color="red")+
+      geom_point(size=0.1)+facet_wrap(.~cell.type)+
+      theme(axis.title.x=element_blank(),
+            axis.text.x=element_blank(),
+            axis.ticks.x=element_blank())+
+      theme(axis.title.y=element_blank(),
+            axis.text.y=element_blank(),
+            axis.ticks.y=element_blank())+
+      stat_cor(aes(label = ..r.label..), method = "spearman", cor.coef.name	="rho")
+    ggsave(filename="Transform Panel Panel.jpg")
   }
   
   parameterMatrix

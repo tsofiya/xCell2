@@ -24,7 +24,7 @@ library(here)
 library(readxl)
 library(minpack.lm)
 library(corrplot)
-
+library(ggpubr)
 
 xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
   # ----------------- Preparing the data -----------------
@@ -40,7 +40,7 @@ xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
   ref= ref[genes, ]
   
   # get samples names
-  samples= ref$main
+  samples= ref$label.main
   types=unique(samples)
   ntypes= length(types)
   singleCellData= create.single.cell.data.mat(ref, types) # single cell data for all cell types- maybe change to average?
@@ -72,14 +72,25 @@ xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
   
   # scoring mixtures according to the generated signatures. 
   weightedScoreMat= weighted.score(mixtures, bestSignatures, bestGsc, types)
+  # if (save.figures){
+  #   for (type in types){
+  #     score = weightedScoreMat[type, ]
+  #     df = data.frame(CellType=types, Score = score)
+  #     ggplot(df,aes(x=CellType,y=score,fill=CellType))+geom_boxplot()+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+ ggtitle(paste0(type, " signature"))
+  #     ggsave( paste0(paste0(type, " signature"),".png"))
+  #   }
+  # }
   
   if (save.figures)
-    plot.linear.regression(working.dir, weightedScoreMat, percentage, types)
+    plot.linear.regression(working.dir, weightedScoreMat, percentage, types, save.figures)
+  #working.dir, mixScores, percentage, types, save.graph= FALSE
   
-  parameterMatrix= create.parameter.matrix(working.dir, types, weightedScoreMat, percentage)
+  parameterMatrix= create.parameter.matrix(working.dir, types, weightedScoreMat, percentage, save.figures)
   
   
   transformedMixScore= transform.mix.score(parameterMatrix, weightedScoreMat)
+  
+  
   
   corr= cor(t(transformedMixScore), (percentage), method = "spearman")
   # Plot the corralation matrix before im
@@ -94,14 +105,15 @@ xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
   
   
   # -----------------Correlation and spillover matrix--------------
-  controls=  rep(9, ntypes)#apply(corr, 1, which.min)
-  controls[9]=which.min(corr[9,])
+  corr= cor(t(transformedMixScore), t(transformedMixScore), method = "spearman")
+  controls=apply(corr,1,which.min)
   refPercentage= create.ref.percentage(types, corr, controls)
   refmixExp=create.mixtures(singleCellData, refPercentage)
   refMixScore= weighted.score(refmixExp, bestSignatures, bestGsc, types)
   transformedRefmix= transform.mix.score(parameterMatrix, refMixScore)
   colnames(transformedRefmix)= types
   spilloverMat= 0.2*((transformedRefmix)) / diag((transformedRefmix))
+  spilloverMat[cbind(1:ntypes, controls)]=0
   #spilloverMat=spilloverMat[row.names(spilloverMat) != "Erythrocytes", , drop = FALSE] 
   #spilloverMat=spilloverMat[,-c(9)]#percentageMat[cbind(1:length(types), controls)]= 0
   
@@ -109,11 +121,13 @@ xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
     corrplot(spilloverMat, is.corr = FALSE, main="spillover matrix")
   #with(mtcars, corrplot(spilloverMat, is.corr = FALSE, main="spillover matrix"), cl.lim = c(-0.2, 0.2))
   
-  spillMatPath= file.path(working.dir,"spillover matrix 2.jpg")
+  spillMatPath= file.path(working.dir,"spillover matrix.jpg")
   jpeg(file=spillMatPath)
   plot.new()
   corrplot(spilloverMat,  is.corr = FALSE, main="spillover matrix")
   dev.off()
+  
+  
   #jpeg(file = NULL)
   }
   

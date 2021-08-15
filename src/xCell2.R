@@ -37,13 +37,11 @@ source(xCell.path)
 
 sdy = readRDS(paste0(working.dir, '/sdy420.rds'))
 genes.to.use= rownames(sdy$expr)
-xCell.my.data= xCellReferenceGenerate(save.figures=FALSE, genes.to.use)
-
+xCell.my.data= xCellReferenceGenerate(ref= NULL, save.figures= TRUE, genes.to.use=genes.to.use)
 
 
 
 sed= SummarizedExperiment(assays=list(counts=(as.matrix(sdy$expr))))
-
 scores= weighted.score(sed, xCell.my.data$signaturesRank, xCell.my.data$signatures, xCell.my.data$types)
 transfomed.score= transform.mix.score(xCell.my.data$fitValues, scores)
 after.spill= spillOver(transformedScores = transfomed.score, xCell.my.data$spill)
@@ -55,20 +53,14 @@ after.spill <- after.spill[ , order(colnames(after.spill))]
 res = cor(t(after.spill),t(fcs))
 # res= res[order(rownames(res)), ]
 # res= res[, order(colnames(res))]
-maxxr <- apply(res, 1, max)
-result <- res[order(-maxxr),]
-maxxc <- apply(result, 2, max)
-result <- result[,order(-maxxc)]
+# maxxr <- apply(res, 1, max)
+# result <- res[order(-maxxr),]
+# maxxc <- apply(result, 2, max)
+# result <- result[,order(-maxxc)]
 
-orgnizedRes= matrix(0, nrow =dim(res)[1] )
-
-for (i in 1:dim(res)[1]){
-  
-  
-}
 
 plot.new()
-jpeg(file="TrainedOnMonacoImmuneDataFine.jpg")
+jpeg(file="TrainedOnBlueprintMain.jpg")
 corrplot(result, is.corr = F)
 dev.off()
 heatmap(res)
