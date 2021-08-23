@@ -1,14 +1,18 @@
 library(ggplot2)
+library(ggpubr)
 
-
-create.single.cell.data.mat= function(ref, types){
+create.single.cell.data.mat= function(ref, types, is.main){
   ntypes= length(types)
   singleCellData= matrix(NA, ntypes, length(rownames(ref)))
   rownames(singleCellData)= types
   colnames(singleCellData)<- rownames(ref)
+  if ( is.main)
+    samples= ref$label.main
+  else
+    samples=ref$label.fine
   
   for (type in types){
-    location= match(type, ref$label.main)
+    location= match(type, samples)
     singleCellData[type,] <- assays(ref)$logcounts[,location]
   }
   
@@ -227,7 +231,6 @@ plot.linear.regression= function(working.dir, mixScores, percentage, types, save
     ggsave(filename="Linear Regression Panel.jpg")
 }
 
-
 create.parameter.matrix= function(working.dir, types, mixScores, percentage, save.graph= FALSE){
   message("Calculate fit values")
   ntypes= length(types)
@@ -287,6 +290,7 @@ transform.mix.score= function(parameterMatrix, mixScores){
     vec = vec/parameterMatrix[i,2]
     transformedMix[i,] = vec
   }
+  
   
   transformedMix
 }

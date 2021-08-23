@@ -37,8 +37,14 @@ source(xCell.path)
 
 sdy = readRDS(paste0(working.dir, '/sdy420.rds'))
 genes.to.use= rownames(sdy$expr)
-xCell.my.data= xCellReferenceGenerate(ref= NULL, save.figures= TRUE, genes.to.use=genes.to.use)
+xCell.my.data= xCellReferenceGenerate(ref= MonacoImmuneData(), save.figures= FALSE, genes.to.use=genes.to.use)
 
+
+plot.new()
+jpeg(file="TrainedOnMonacoImmuneDataFine.jpg")
+maxx= max(xCell.my.data$spill)
+corrplot(xCell.my.data$spill, is.corr = T, col.lim=c(-maxx, maxx), tl.cex=0.75)
+dev.off()
 
 
 sed= SummarizedExperiment(assays=list(counts=(as.matrix(sdy$expr))))
@@ -53,14 +59,15 @@ after.spill <- after.spill[ , order(colnames(after.spill))]
 res = cor(t(after.spill),t(fcs))
 # res= res[order(rownames(res)), ]
 # res= res[, order(colnames(res))]
-# maxxr <- apply(res, 1, max)
-# result <- res[order(-maxxr),]
-# maxxc <- apply(result, 2, max)
-# result <- result[,order(-maxxc)]
+maxxr <- apply(res, 1, max)
+result <- res[order(-maxxr),]
+maxxc <- apply(result, 2, max)
+result <- result[,order(-maxxc)]
 
 
 plot.new()
-jpeg(file="TrainedOnBlueprintMain.jpg")
+jpeg(file="TrainedOnMonacoImmuneDataFine.jpg")
 corrplot(result, is.corr = F)
 dev.off()
-heatmap(res)
+
+

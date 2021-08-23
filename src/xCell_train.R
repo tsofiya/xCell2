@@ -26,7 +26,7 @@ library(minpack.lm)
 library(corrplot)
 library(ggpubr)
 
-xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
+xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use, is.main=TRUE){
   # ----------------- Preparing the data -----------------
   # Read database- should be from user.
   working.dir= paste0(here(), "/src")
@@ -34,16 +34,20 @@ xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
   source(filePath)
   
   if (is.null(ref))
-    ref <- BlueprintEncodeData()
+    ref <- MonacoImmuneData()#BlueprintEncodeData()
       
   genes= intersect(genes.to.use,rownames(ref))
   ref= ref[genes, ]
   
   # get samples names
-  samples= ref$label.main
+  if ( is.main)
+    samples= ref$label.main
+  else
+    samples= ref$label.fine
+  
   types=unique(samples)
   ntypes= length(types)
-  singleCellData= create.single.cell.data.mat(ref, types) # single cell data for all cell types- maybe change to average?
+  singleCellData= create.single.cell.data.mat(ref, types, is.main) # single cell data for all cell types- maybe change to average?
   
   
   # ----------------- Generating Signatures -----------------
@@ -132,7 +136,7 @@ xCellReferenceGenerate= function(ref= NULL, save.figures= TRUE, genes.to.use){
   }
   
   xCell.data = list(spill=spilloverMat,fitValues= parameterMatrix,signatures=bestGsc, signaturesRank= bestSignatures, genes=ref@NAMES, types= types)
-  save(xCell.data,file=file.path(here(),'xCell.data.Rdata'))
+  save(xCell.data,file=file.path(here(),'xCellBenchmarkExampleTrained.Rdata'))
   xCell.data
   
 }
